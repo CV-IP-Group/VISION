@@ -1,0 +1,110 @@
+# =============================
+# VisionMate Project .gitignore (Safe Defaults)
+# =============================
+
+# ---- Python bytecode / build ----
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.eggs/
+build/
+dist/
+*.log
+*.tmp
+*.bak
+*.orig
+*.rej
+MANIFEST
+pip-wheel-metadata/
+
+# ---- Virtual environments ----
+.env/
+venv/
+.venv/
+.envrc
+.python-version
+
+# ---- Editor / IDE metadata ----
+.vscode/
+.idea/
+*.code-workspace
+
+# ---- OS / Misc ----
+.DS_Store
+Thumbs.db
+*.swp
+*.bak
+*.tmp
+
+# ---- Test / coverage artifacts ----
+.coverage
+coverage.xml
+htmlcov/
+pytest_cache/
+.cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.tox/
+.nox/
+.pylint.d/
+.hypothesis/
+
+# ---- Runtime artifacts (generated at run time) ----
+captured_images/
+runs/
+# Depth & overlays will be regenerated
+runs/depth/
+# TTS audio output
+runs/tts/
+# LiDAR snapshots & intermediate temp files
+runs/lidar_snapshot*.json
+lidar_frames/
+
+# ---- Local databases / misc state ----
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+
+# ---- Data samples / training intermediates (retain source definitions, ignore large dumps) ----
+# Keep small versioned CSVs if important; comment out lines you need.
+# data/*.csv
+# data/*.json
+# Uncomment above if large proprietary datasets should not be checked in.
+
+# ---- Model weights / large binaries ----
+weights/
+models/*.joblib
+models/*.json
+# If you want threshold JSON under version control, remove the above line for models/*.json
+
+# ---- Audio cache ----
+*.wav
+*.mp3
+*.flac
+
+# ---- Jupyter notebooks checkpoints ----
+.ipynb_checkpoints/
+
+# ---- Temporary archives ----
+*.zip
+*.tar
+*.tar.gz
+
+# ---- Optional: Ignore generated screenshots / captures ----
+# captures/
+
+# ---- Node / front-end (in case of future additions) ----
+node_modules/
+
+# ---- Security: Avoid committing secrets ----
+*.env
+secret.*
+
+# =============================
+# Adjust as needed: remove lines for artifacts you want tracked.
+# =============================

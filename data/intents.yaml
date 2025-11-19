@@ -1,0 +1,65 @@
+intents:
+  - name: object_ahead
+    description: 询问正前方可见的物体/目标
+    examples:
+      - 我前面有什么
+      - 前面有什么东西
+      - 帮我看看面前是什么
+      - 我面前是什么
+      - 正前方有什么
+  - name: read_sign_text
+    description: 读取广告牌/招牌/标识上的文字
+    examples:
+      - 广告上写了什么
+      - 招牌写了什么
+      - 读一下前面的广告
+      - 帮我读下招牌
+      - 读一下这块牌子
+  - name: describe_scene
+    description: 描述周围环境/场景
+    examples:
+      - 描述一下周围环境
+      - 周围环境怎么样
+      - 帮我讲下四周系点
+      - Describe the scene
+      - Describe around me
+  - name: guide_direction
+    description: 方位/指向性引导（左/右/前/后/上/下）
+    examples:
+      - 往左一点
+      - 向右一点
+      - 再靠右一点
+      - 向左边
+      - 向右边
+  - name: hazard_alert
+    description: 询问/提醒台阶、障碍物、车辆等安全相关信息
+    examples:
+      - 前面有台阶吗
+      - 前方有没有坑
+      - 有障碍物吗
+      - 注意安全
+      - 前面有车没
+  - name: distance_query
+    description: 询问距离/范围（几米/多远/最近）
+    examples:
+      - 前面多远有台阶
+      - 离我几多米有障碍
+      - 最近的路牌有多远
+      - How far is the sign
+      - How many meters ahead
+  - name: repeat_last
+    description: 让系统重复/复述上一次输出
+    examples:
+      - 再说一遍
+      - 重复一下
+      - 刚才那句再讲一次
+      - Repeat please
+      - Say it again
+  - name: none
+    description: 与任务无关/闲聊/系统误触
+    examples:
+      - 今天天气不错
+      - 等一下
+      - 我在想事情
+      - 你叫什么名字
+      - 播放音乐

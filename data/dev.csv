@@ -1,0 +1,177 @@
+text,label
+稍后,none
+再复述一次,repeat_last
+讲多次先啦,repeat_last
+没事了,none
+稍后,none
+距离最近的车多远,distance_query
+向右移 啊,guide_direction
+麻烦再重复一下,repeat_last
+这里是什么样子 ok,describe_scene
+Read the sign,read_sign_text
+前面安全吗,hazard_alert
+有东西挡路吗,hazard_alert
+再读一遍,repeat_last
+再说一遍,repeat_last
+等一下,none
+再讲一遍 呀,repeat_last
+整环境说一下 ok,describe_scene
+几点了,none
+再述一次,repeat_last
+Anything ahead,object_ahead
+右边少少,guide_direction
+前方有冇坑,hazard_alert
+读一读这段文字,read_sign_text
+哈喽,none
+前面多远有台阶,distance_query
+小心台阶,hazard_alert
+再说一次可以吗,repeat_last
+识别下前面有什么 啊,object_ahead
+注意前方楼梯,hazard_alert
+前面有咩嘢,object_ahead
+Repeat please,repeat_last
+再说一遍,repeat_last
+整体环境说一下,describe_scene
+前面系乜嘢,object_ahead
+讲下在周围是什么场景,describe_scene
+我前面有什么 啊,object_ahead
+方系乜嘢,object_ahead
+识别下前面有什么,object_ahead
+周围环境么样 呢,describe_scene
+我在想事情,none
+提醒我有障物,hazard_alert
+前方目标是什么,object_ahead
+注意前方台阶,hazard_alert
+Is there a step aead,hazard_alert
+附环境如何,describe_scene
+最近的门口喺边度,distance_query
+呢个牌写咩,read_sign_text
+读下面前个海报,read_sign_text
+距离最近的障碍几米,distance_query
+帮我讲四周系点,describe_scene
+前面几远,distance_query
+前面的指示牌写咩,read_sign_text
+Read that ad,read_sign_text
+往左一点,guide_direction
+Say it again 啦,repeat_last
+再前一些,guide_direction
+现场情况样,describe_scene
+What is in front of me,object_ahead
+有东西挡路吗,hazard_alert
+向前对齐,guide_direction
+OK,none
+再说一次可以吗,repeat_last
+讲次先啦 ok,repeat_last
+帮我识别面前嘅东西,object_ahead
+右边少少,guide_direction
+面前有咩,object_ahead
+播放音乐,none
+周围环境怎么样,describe_scene
+往前少少,guide_direction
+无所谓,none
+讀下前面个海报,read_sign_text
+今朝点样,none
+有冇楼梯,hazard_alert
+Repeat please please,repeat_last
+帮我描述下现在的画,describe_scene
+手机电量有多少 ok,none
+哈喽,none
+前目标是什么,object_ahead
+再前一些 喔,guide_direction
+最近的门口喺边度,distance_query
+还有多远到红绿灯 啊,distance_query
+Anything ahead,object_ahead
+再说一遍 唔,repeat_last
+你叫什么名字,none
+读一读这段文字,read_sign_text
+个招牌写咩,read_sign_text
+帮我看下有没有坑,hazard_alert
+前方有没有坑 呢,hazard_alert
+往前少少 欸,guide_direction
+离我最近的招牌有多远,distance_query
+周边环境如何,describe_scene
+距离最近的障碍几米,distance_query
+我在打电话 呀,none
+前面危险吗,hazard_alert
+再读一遍,repeat_last
+我附近是什么地方,describe_scene
+有东西挡路吗,hazard_alert
+正前方有什么,object_ahead
+向右边,guide_direction
+Check what is in front,object_ahead
+广告牌讲咩,read_sign_text
+前面个banner写咩,read_sign_text
+注意安全,hazard_alert
+How many meters ahead,distance_query
+还有多远到台阶,distance_query
+往左一点,guide_direction
+再靠右一点,guide_direction
+Read the sign,read_sign_text
+左边少少 喔,guide_direction
+有障碍物吗,hazard_alert
+What does the sign say,read_sign_text
+解释一下我周围,describe_scene
+现场描述 唔,describe_scene
+右边少少,guide_direction
+Move slightly left,guide_direction
+Describe around me,describe_scene
+向前行两步,guide_direction
+Go forward a little,guide_direction
+向左边,guide_direction
+向前行两步,guide_direction
+帮我看下有没有坑,hazard_alert
+Fine,none
+啊,none
+附近环境何,describe_scene
+今朝点样,none
+注意前方阶梯,hazard_alert
+右边少少,guide_direction
+有冇楼梯,hazard_alert
+How far is the sign,distance_query
+What is written on the billboard,read_sign_text
+不用了,none
+前方目标是什 ok,object_ahead
+这里周围有什么 喔,describe_scene
+前面多远有台阶,distance_query
+前面多远有台,distance_query
+小心台阶,hazard_alert
+What is written on the billboard,read_sign_text
+我在打电话,none
+环境描述,describe_scene
+离我最近的指示牌喺边度,distance_query
+重复刚才的,repeat_last
+前面系乜嘢,object_ahead
+听唔清再讲一次 呢,repeat_last
+离我最近的指示牌喺边度,distance_query
+重复刚才的 thanks,repeat_last
+距离最近的车多远,distance_query
+前面有冇车,hazard_alert
+最近的门口喺边度,distance_query
+讲下现在周围是什么场景,describe_scene
+Say it again right now,repeat_last
+附近环境如何 呢,describe_scene
+啊,none
+Move to the right a bit,guide_direction
+Read the sign,read_sign_text
+read下前面个海报,read_sign_text
+读一下前面的广告牌,read_sign_text
+报上写了咩嘢,read_sign_text
+呃,none
+我前面有什么,object_ahead
+正方有什么,object_ahead
+前面的指示牌写咩 now,read_sign_text
+最近的路牌有多远 欸,distance_query
+嗰块招牌写咩,read_sign_text
+我近是什么地方,describe_scene
+面前有物体吗 啊,object_ahead
+What is written on the billboard,read_sign_text
+Anything ahead 啦,object_ahead
+多远到拐角,distance_query
+前面系乜嘢,object_ahead
+描述一下周围环境,describe_scene
+有无危险 now,hazard_alert
+How far is the sign,distance_query
+再复述一次,repeat_last
+离我最近的招牌有远 please,distance_query
+向前行两步,guide_direction
+请复述上一,repeat_last

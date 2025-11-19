@@ -1,0 +1,22 @@
+name: visionmate
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - fastapi
+  - uvicorn
+  - pydantic
+  - scikit-learn
+  - joblib
+  - numpy
+  - pandas
+  - requests
+  - matplotlib
+  - pyserial
+  - pip
+  - pip:
+      - opencv-python
+      - sounddevice
+      - faster-whisper
+      - silero-vad
+    - pyttsx3

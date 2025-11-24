@@ -93,6 +93,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 import cv2
+import numpy as np
 
 from vision.utils import ensure_dir
 
@@ -169,12 +170,21 @@ def _capture_with_retries(
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, resolution[0])
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, resolution[1])
             ret, frame = False, None
+            print(f"[INFO] Warming up camera ({label})...")
+            for _ in range(15):
+                cap.read()
             for read_try in range(retries + 1):
                 ret, frame = cap.read()
                 if ret and frame is not None:
                     break
                 if read_try < retries:
                     time.sleep(retry_delay)
+            if ret and frame is not None:
+                gray_check = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                if np.mean(gray_check) < 5:
+                    print("[WARN] Frame is too dark! Retrying capture...")
+                    ret = False
+                    frame = None
         else:
             ret, frame = False, None
         cap.release()
@@ -194,6 +204,9 @@ def _capture_with_retries(
             filename = f"{label}_frame_{timestamp}.jpg"
             filepath = os.path.join(base_dir, filename)
             cv2.imwrite(filepath, frame)
+            latest_root = ensure_dir("runs")
+            latest_rgb_path = latest_root / "latest_rgb.jpg"
+            cv2.imwrite(str(latest_rgb_path), frame)
             return filepath, attempts
 
         if attempt < retries:

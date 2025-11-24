@@ -4,9 +4,12 @@
 from __future__ import annotations
 
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Literal, Optional, Tuple
+import json
+import math
 
 import frame_capture
 from lidar.lidar_bridge import read_latest_snapshot
@@ -50,6 +53,48 @@ class Orchestrator:
         "low": (
             ("low", (640, 480)),
         ),
+    }
+
+    ENTITY_MAP: Dict[str, str] = {
+        # Furniture
+        "椅子": "chair",
+        "凳": "chair",
+        "桌": "dining table",
+        "桌子": "dining table",
+        "沙发": "couch",
+        "床": "bed",
+        # Electronics
+        "电脑": "laptop",
+        "本": "laptop",
+        "PC": "laptop",
+        "手机": "cell phone",
+        "电话": "cell phone",
+        "手提": "cell phone",
+        "电视": "tv",
+        "屏幕": "tv",
+        "显示器": "tv",
+        "鼠标": "mouse",
+        "键盘": "keyboard",
+        # Personal
+        "人": "person",
+        "家伙": "person",
+        "男": "person",
+        "女": "person",
+        "手提包": "handbag",
+        "手袋": "handbag",
+        "箱": "suitcase",
+        "伞": "umbrella",
+        # Kitchen
+        "杯": "cup",
+        "杯子": "cup",
+        "水杯": "cup",
+        "瓶": "bottle",
+        "碗": "bowl",
+        # Vehicles
+        "汽车": "car",
+        "巴士": "bus",
+        "公交": "bus",
+        "单车": "bicycle",
     }
 
     _LIDAR_UNAVAILABLE_NOTE = "当前无 LiDAR 快照，估算可能存在误差。"
@@ -180,31 +225,6 @@ class Orchestrator:
                 "meta": meta,
             }
 
-    # handler = self._resolve_handler(function_name)
-        # if handler is None:
-        #     total_elapsed = time.perf_counter() - start_total
-        #     self._record_timing(meta["timings"], "total", total_elapsed)
-        #     self._attach_lidar_snapshot(meta, lidar_snapshot)
-        #     return {
-        #         "status": "warn",
-        #         "message": "该任务尚未实现，请稍后再试。",
-        #         "result": None,
-        #         "intent": intent_spec,
-        #         "meta": meta,
-        #     }
-        # --- NEW VERSION ---
-        # Keep the legacy resolver as a guard so unsupported tasks surface as warnings.
-        handler = self._resolve_handler(function_name)
-        if handler is None:
-            cv_payload = {
-                "status": "warn",
-                "meta": {"error_code": "unsupported_function", "function": function_name},
-                "message": "该任务尚未实现，请稍后再试。",
-                "result": None,
-            }
-        else:
-            cv_payload = None
-
         desired_resolution = self.RESOLUTION_STRATEGY.get(function_name, "medium")
         image_path, used_resolution, capture_meta = self._safe_capture(
             desired_resolution,
@@ -231,18 +251,30 @@ class Orchestrator:
                 "meta": meta,
             }
 
-        args = intent_spec.get("args", {})
+        args = dict(intent_spec.get("args", {}))
+        slot_kwargs: Dict[str, str] = {}
+        # Support both Chinese and English direction hints.
+        if re.search(r"(左|left)", text_norm):
+            slot_kwargs["focus"] = "left"
+        elif re.search(r"(右|right)", text_norm):
+            slot_kwargs["focus"] = "right"
+        # Dynamic Entity Extraction
+        # Iterate through the map to find any matching keyword in the user's text
+        for keyword, coco_label in self.ENTITY_MAP.items():
+            if keyword.lower() in text_norm:
+                slot_kwargs["object"] = coco_label
+                # Optional: break after first match to avoid ambiguity, or keep last match
+                break
+        if slot_kwargs:
+            args.update(slot_kwargs)
         cv_start = time.perf_counter()
         try:
-            # result = handler(image_path=image_path, **args)
-            # --- NEW VERSION ---
-            if cv_payload is None:
-                cv_payload = self._cv.run_task(
-                    function_name,
-                    image_path,
-                    lidar_snapshot,
-                    **args,
-                )
+            cv_payload = self._cv.run_task(
+                function_name,
+                image_path,
+                lidar_snapshot,
+                **args,
+            )
         except Exception as exc:  # noqa: BLE001
             # meta["timings"]["cv"] = time.perf_counter() - cv_start
             # meta["timings"]["total"] = time.perf_counter() - start_total
@@ -275,13 +307,13 @@ class Orchestrator:
         if fusion_meta:
             meta.update(fusion_meta)
 
-        if cv_status != "ok":
+        if cv_status == "error":
             total_elapsed = time.perf_counter() - start_total
             self._record_timing(meta["timings"], "total", total_elapsed)
             self._attach_lidar_snapshot(meta, lidar_context)
             return {
-                "status": cv_status,
-                "message": message_override or "该任务尚未实现，请稍后再试。",
+                "status": "error",
+                "message": message_override or "视觉模块执行失败，请稍后再试。",
                 "result": None,
                 "intent": intent_spec,
                 "meta": meta,
@@ -299,7 +331,8 @@ class Orchestrator:
                 "meta": meta,
             }
 
-        message = self._compose_message(result)
+        target_object = args.get("object")
+        message = self._compose_message(result, target_object=target_object)
         # 注入耗时信息到视觉结果的 meta，供 data.meta.timings 使用。
         # timings_copy = dict(meta.get("timings", {}))
         # result.meta.setdefault("timings", {}).update(timings_copy)
@@ -319,9 +352,28 @@ class Orchestrator:
         if fusion_meta:
             result.meta.update({k: v for k, v in fusion_meta.items() if k not in {"error_code"}})
 
+        final_message = message_override or message
+        image_result_path = getattr(result, "image_path", None)
+        vis_meta = result.meta if isinstance(getattr(result, "meta", None), dict) else {}
+        status_dump = {
+            "timestamp": time.time(),
+            "intent": function_name or "unknown",
+            "raw_text": text,
+            "message": final_message,
+            "image_path": image_result_path,
+            "hazard_level": meta.get("hazard_level", "safe"),
+            "timings": meta.get("timings", {}),
+            "yolo_debug_path": vis_meta.get("yolo_debug_path"),
+            "depth_overlay_path": vis_meta.get("depth_overlay_path"),
+            "depth_raw_path": vis_meta.get("depth_raw_path"),
+        }
+        status_dir = Path(self._run_dir)
+        status_dir.mkdir(parents=True, exist_ok=True)
+        with open(status_dir / "latest_status.json", "w", encoding="utf-8") as f:
+            json.dump(status_dump, f, ensure_ascii=False, indent=2)
         return {
             "status": "ok",
-            "message": message_override or message,
+            "message": final_message,
             "result": result,
             "intent": intent_spec,
             "meta": meta,
@@ -360,25 +412,76 @@ class Orchestrator:
 
         return None, None, {"elapsed": time.perf_counter() - capture_start, "attempts": attempts}
 
-    def _compose_message(self, result: VisionResult) -> str:
+    def _compose_message(
+        self,
+        result: VisionResult,
+        target_object: Optional[str] = None,
+    ) -> str:
         fragments: list[str] = []
-        if result.caption:
-            fragments.append(result.caption)
-        elif result.ocr_text:
-            fragments.append(f"OCR 读到：{result.ocr_text}")
-        elif result.objects:
-            labels = self._unique_labels(result.objects)
-            if labels:
-                names = ", ".join(sorted(labels))
-                fragments.append(f"检测到：{names}")
-        else:
-            fragments.append("任务完成，等待接入真实模型。")
+        caption_has_distance = False
+        base_message_added = False
 
+        if result.task == "vision.ocr_read":
+            if result.ocr_text:
+                fragments.append(f"OCR 读到：{result.ocr_text}")
+            else:
+                fragments.append("未在画面中识别到文字。")
+            base_message_added = True
+        else:
+            labels = []
+            if result.objects:
+                labels = sorted({box.cls for box in result.objects if box.cls})
+
+            if target_object:
+                focus_boxes = [box for box in (result.objects or []) if box.cls == target_object]
+                if focus_boxes:
+                    fragments.append(f"找到了 {target_object}，共 {len(focus_boxes)} 个。")
+                else:
+                    if labels:
+                        others = ", ".join(labels)
+                        fragments.append(
+                            f"画面里没有找到 {target_object}，但检测到：{others}。"
+                        )
+                    else:
+                        fragments.append(f"画面里没有找到 {target_object}。")
+                base_message_added = True
+
+            if not base_message_added:
+                if result.caption:
+                    fragments.append(result.caption)
+                    caption_has_distance = self._caption_contains_distance(result.caption)
+                    base_message_added = True
+                elif labels:
+                    fragments.append(f"检测到：{', '.join(labels)}。")
+                    base_message_added = True
+                else:
+                    fragments.append("当前画面未检测到已知目标。")
+                    base_message_added = True
+
+        forward_distance = result.meta.get("forward_min_distance")
+        lidar_sentence_added = False
+        if isinstance(forward_distance, (int, float)) and math.isfinite(forward_distance):
+            if not caption_has_distance:
+                dist = float(forward_distance)
+                if dist < 0.3:
+                    sentence = f"前方 {dist:.2f} 米，危险，极近距离（LiDAR）。"
+                elif dist < 0.5:
+                    sentence = f"前方 {dist:.2f} 米，非常近（LiDAR）。"
+                else:
+                    sentence = f"前方 {dist:.2f} 米有障碍物（LiDAR）。"
+                fragments.append(sentence)
+                lidar_sentence_added = True
+
+        skip_distance = result.task == "vision.ocr_read" or caption_has_distance or lidar_sentence_added
         distance_msg = self._distance_message(result.meta)
-        if distance_msg:
+        if distance_msg and not skip_distance:
             fragments.append(distance_msg)
 
         return " ".join(fragments).strip()
+
+    @staticmethod
+    def _caption_contains_distance(text: str) -> bool:
+        return bool(text and re.search(r"米", text))
 
     @staticmethod
     def _unique_labels(boxes: Iterable[Box]) -> set[str]:

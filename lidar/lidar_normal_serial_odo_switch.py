@@ -13,6 +13,8 @@ RPLIDAR A1 (A1M8-R6, fw=1.29) —— 纯 pyserial NORMAL@115200
 
 import json
 import os, sys, time, math, threading, argparse, datetime
+import requests
+import pyttsx3
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
@@ -44,6 +46,33 @@ KNOWN_VIDPID = {('10C4','EA60'), ('1A86','7523'), ('067B','2303')}
 HAZARD_ANGLE_RANGE = 30.0
 HAZARD_DIST_THRESHOLD = 0.8
 SNAPSHOT_FILE = "runs/lidar_snapshot.json"
+MCP_API_URL = "http://127.0.0.1:9000/api/v1/mcp"
+MCP_COOLDOWN_SECONDS = 5.0
+
+_tts_engine = pyttsx3.init()
+_tts_engine.setProperty("rate", 150)
+_tts_engine.setProperty("volume", 0.9)
+
+# ------------------------------------------------------------------
+def _forward_hazard_to_mcp_and_speak() -> None:
+    """Send a hazard check to MCP and speak the returned message. """
+    payload = {
+        "api_version": "v1",
+        "text": "check hazards",
+        "camera_index": None,
+        "tts": False,
+    }
+    try:
+        response = requests.post(MCP_API_URL, json=payload, timeout=0.5)
+        response.raise_for_status()
+        data = response.json()
+        message = data.get("message") or data.get("intent", {}).get("msg")
+        if message:
+            print("[LIDAR MCP]", message)
+            _tts_engine.say(message)
+            _tts_engine.runAndWait()
+    except Exception as exc:
+        print(f"[LIDAR MCP ERROR] {exc}")
 
 # ---------------------- 通用小工具 ----------------------
 def huber_weights(res, delta=0.15):
@@ -201,6 +230,18 @@ class LidarReader:
             last_new=False; frame_pts=[]; frame_q=[]; frame_ang=[]; frame_dist=[]
             bads=0; last_frame_t=time.time()
 
+            in_hazard_alert = False
+            last_mcp_ts = 0.0
+
+            def _emit_hazard_beep() -> None:
+                if winsound:
+                    try:
+                        winsound.Beep(1000, 200)
+                    except RuntimeError:
+                        print('\a', end='', flush=True)
+                else:
+                    print('\a', end='', flush=True)
+
             while not self.stop_evt.is_set():
                 raw = read_exact(ser,5,t=1.0)
                 if not raw:
@@ -240,14 +281,22 @@ class LidarReader:
                     forward_min_dist = None
                     if forward_mask.any():
                         forward_min_dist = float(np.min(dist_m[forward_mask]))
-                    if forward_min_dist is not None and forward_min_dist < HAZARD_DIST_THRESHOLD:
-                        if winsound:
-                            try:
-                                winsound.Beep(1000, 200)
-                            except RuntimeError:
-                                print('\a', end='', flush=True)
+                    now = time.time()
+                    is_hazard = (
+                        forward_min_dist is not None
+                        and forward_min_dist < HAZARD_DIST_THRESHOLD
+                    )
+                    if is_hazard:
+                        if not in_hazard_alert:
+                            _emit_hazard_beep()
+                            if now - last_mcp_ts >= MCP_COOLDOWN_SECONDS:
+                                _forward_hazard_to_mcp_and_speak()
+                                last_mcp_ts = now
+                            in_hazard_alert = True
                         else:
-                            print('\a', end='', flush=True)
+                            _emit_hazard_beep()
+                    else:
+                        in_hazard_alert = False
                     snapshot = {
                         'forward_min_distance': forward_min_dist,
                         'source': 'hardware',

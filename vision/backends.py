@@ -58,9 +58,6 @@ class StubBackends:
     def ocr_read(self, image_path: str, **_: Dict) -> str:  # pragma: no cover - placeholder
         return "OCR 功能尚未启用，稍后再试。"
 
-    @property
-    def depth_error(self) -> Optional[str]:
-        return None
 
     def calibrated_absolute_depth(
         self,
@@ -94,6 +91,23 @@ class RealBackends:
             ``VISIONMATE_MIDAS_MODEL`` or point to local weights via
             ``VISIONMATE_MIDAS_WEIGHTS`` / ``weights/{model}.pt``.
     """
+
+    _MIDAS_MODEL_ALIASES = {
+        "midas_small": "MiDaS_small",
+        "small": "MiDaS_small",
+        "dpt_hybrid": "DPT_Hybrid",
+        "dpt_large": "DPT_Large",
+    }
+
+    @classmethod
+    def _canonicalize_midas_model(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            return None
+        lookup = cls._MIDAS_MODEL_ALIASES.get(normalized.lower())
+        return lookup if lookup else normalized
 
     def __init__(
         self,
@@ -156,7 +170,10 @@ class RealBackends:
     def _determine_midas_model(self, explicit_model: str | None, weights_root: Path) -> str:
         """Resolve which MiDaS model name should be used."""
 
-        candidates = [explicit_model, os.getenv("VISIONMATE_MIDAS_MODEL")]
+        candidates = [
+            self._canonicalize_midas_model(explicit_model),
+            self._canonicalize_midas_model(os.getenv("VISIONMATE_MIDAS_MODEL")),
+        ]
         for candidate in candidates:
             if candidate and candidate.strip():
                 return candidate.strip()
@@ -177,11 +194,18 @@ class RealBackends:
 
     def _setup_midas(self) -> tuple[torch.nn.Module, Any]:
         """Attempt to create a MiDaS model via local weights, torch.hub, or timm."""
-
+        print(f"[RealBackends] Using MiDaS depth model: {self._midas_model}")
         if self._midas_weights_path is not None:
             return self._load_local_midas()
 
-        return self._load_from_torch_hub(self._midas_model)
+        try:
+            return self._load_from_torch_hub(self._midas_model)
+        except Exception as exc:  # pragma: no cover - fallback path
+            fallback_model = "MiDaS_small"
+            print(f"[RealBackends] MiDaS({self._midas_model}) fallback to {fallback_model}: {exc}")
+            self._midas_model = fallback_model
+            self._midas_weights_path = None
+            return self._load_from_torch_hub(fallback_model)
 
     def _load_local_midas(self) -> tuple[torch.nn.Module, Any]:
         """Load a MiDaS model from a provided checkpoint."""
@@ -278,6 +302,14 @@ class RealBackends:
 
         img = Image.open(image_path).convert("RGB")
         results = self._yolo(img, verbose=False)[0]
+        annotated_frame = results.plot()
+        if isinstance(annotated_frame, np.ndarray):
+            annotated_image = Image.fromarray(cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB))
+        else:
+            annotated_image = annotated_frame
+        debug_path = self._output_dir / "debug_yolo_input.jpg"
+        annotated_image.save(str(debug_path))
+        print(f"[DEBUG] YOLO Raw Detections: {len(results.boxes)}")
         names = results.names
 
         boxes: List[Box] = []
@@ -302,7 +334,12 @@ class RealBackends:
         img = cv2.imread(image_path)
         if img is None:
             return ""
-        results = self._ocr.readtext(img)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        enhanced = clahe.apply(gray)
+        debug_path = self._output_dir / "debug_ocr_processed.jpg"
+        cv2.imwrite(str(debug_path), enhanced)
+        results = self._ocr.readtext(enhanced)
         texts: List[str] = []
         for _box, text, conf in results:
             if not text:
@@ -371,19 +408,48 @@ class RealBackends:
         rel_depth: Optional[np.ndarray],
         lidar_dist: Optional[float] = None,
     ) -> Optional[np.ndarray]:
+        """Apply a linear projection and gently rescale with LiDAR when available."""
+
         if rel_depth is None or rel_depth.size == 0:
             return rel_depth
-        d = rel_depth
+
+        base = self.linear_depth_projection(rel_depth, near=0.4, far=8.0)
+        if base is None or base.size == 0:
+            return base
+
+        if lidar_dist is None or not np.isfinite(lidar_dist) or lidar_dist <= 0.0:
+            self._depth_error = None
+            return base
+
         try:
-            d_max = float(np.nanpercentile(d, 95))
+            _, w = base.shape
         except ValueError:
-            return self.linear_depth_projection(d)
-        if d_max <= 0.0:
-            return self.linear_depth_projection(d)
-        scale = (lidar_dist if lidar_dist and lidar_dist > 0 else 1.0) * d_max
-        depth_map = scale / (d + 1e-6)
-        depth_map = np.clip(depth_map, 0.1, 20.0)
-        return depth_map.astype("float32")
+            self._depth_error = None
+            return base
+
+        start = w // 3
+        end = max(start + 1, (2 * w) // 3)
+        center_slice = base[:, start:end]
+        finite = center_slice[np.isfinite(center_slice) & (center_slice > 0)]
+        if finite.size < 20:
+            self._depth_error = None
+            return base
+
+        visual_forward = float(np.percentile(finite, 10))
+        if not (0.3 <= lidar_dist <= 10.0):
+            self._depth_error = None
+            return base
+
+        if abs(lidar_dist - visual_forward) > 3.0:
+            self._depth_error = (
+                f"lidar_mismatch: lidar={lidar_dist:.2f}, visual={visual_forward:.2f}"
+            )
+            return base
+
+        scale = lidar_dist / max(0.1, visual_forward)
+        scale = float(np.clip(scale, 0.3, 3.0))
+        self._depth_error = None
+        return (base * scale).astype("float32")
 
     @staticmethod
     def linear_depth_projection(rel_depth: np.ndarray, near: float = 0.5, far: float = 8.0) -> np.ndarray:
@@ -421,16 +487,38 @@ class RealBackends:
         h, w = depth_map.shape
         for box in boxes:
             x1, y1, x2, y2 = box.xyxy
-            x1 = max(0, min(w - 1, int(x1)))
-            y1 = max(0, min(h - 1, int(y1)))
-            x2 = max(0, min(w - 1, int(x2)))
-            y2 = max(0, min(h - 1, int(y2)))
-            if x2 <= x1 or y2 <= y1:
+            width = x2 - x1
+            height = y2 - y1
+            if width <= 0 or height <= 0:
                 continue
-            crop = depth_map[y1:y2, x1:x2]
+
+            cx1 = x1 + 0.25 * width
+            cx2 = x1 + 0.75 * width
+            cy1 = y1 + 0.25 * height
+            cy2 = y1 + 0.75 * height
+
+            ix1 = max(0, min(w, int(np.floor(cx1))))
+            iy1 = max(0, min(h, int(np.floor(cy1))))
+            ix2 = max(0, min(w, int(np.ceil(cx2))))
+            iy2 = max(0, min(h, int(np.ceil(cy2))))
+
+            if ix2 <= ix1 or iy2 <= iy1:
+                ix1 = max(0, min(w, int(np.floor(x1))))
+                iy1 = max(0, min(h, int(np.floor(y1))))
+                ix2 = max(0, min(w, int(np.ceil(x2))))
+                iy2 = max(0, min(h, int(np.ceil(y2))))
+                if ix2 <= ix1 or iy2 <= iy1:
+                    continue
+
+            crop = depth_map[iy1:iy2, ix1:ix2]
             if crop.size == 0:
                 continue
-            box.dist = float(np.nanmedian(crop))
+
+            valid = crop[np.isfinite(crop) & (crop > 0)]
+            if valid.size == 0:
+                continue
+
+            box.dist = float(np.median(valid))
         return boxes
 
     def _write_depth_artifacts(self, image_path: str, depth_map: np.ndarray) -> tuple[Optional[str], Optional[str]]:
@@ -442,6 +530,8 @@ class RealBackends:
         suffix = f"{stem}_{timestamp}"
         depth_path = self._depth_dir / f"{suffix}_depth.png"
         cv2.imwrite(str(depth_path), normalized)
+        latest_depth_path = self._output_dir / "latest_depth.jpg"
+        cv2.imwrite(str(latest_depth_path), normalized)
         overlay = self._build_overlay(image_path, normalized)
         overlay_path: Optional[str] = None
         if overlay is not None:
@@ -454,16 +544,11 @@ class RealBackends:
     def _normalize_depth_map(depth_map: np.ndarray) -> np.ndarray:
         if depth_map.size == 0:
             return np.zeros_like(depth_map, dtype="uint8")
-        finite = depth_map[np.isfinite(depth_map)]
-        if finite.size == 0:
-            return np.zeros_like(depth_map, dtype="uint8")
-        d_min = float(np.nanmin(finite))
-        d_max = float(np.nanmax(finite))
-        if d_max <= d_min:
-            return np.zeros_like(depth_map, dtype="uint8")
-        safe_map = np.nan_to_num(depth_map, nan=d_min, neginf=d_min, posinf=d_max)
-        span = d_max - d_min
-        scaled = np.clip((safe_map - d_min) / span, 0.0, 1.0)
+
+        MIN_M = 0.0
+        MAX_M = 3.0
+        safe_map = np.clip(depth_map, MIN_M, MAX_M)
+        scaled = 1.0 - (safe_map / MAX_M)
         normalized = (scaled * 255.0).astype("uint8")
         return normalized
 
@@ -474,8 +559,8 @@ class RealBackends:
         height, width = image.shape[:2]
         if depth_norm.shape != (height, width):
             depth_norm = cv2.resize(depth_norm, (width, height), interpolation=cv2.INTER_LINEAR)
-        heatmap = cv2.applyColorMap(depth_norm, cv2.COLORMAP_INFERNO)
-        overlay = cv2.addWeighted(image, 0.6, heatmap, 0.4, 0.0)
+        heatmap = cv2.applyColorMap(depth_norm, cv2.COLORMAP_JET)
+        overlay = cv2.addWeighted(image, 0.7, heatmap, 0.3, 0.0)
         return overlay
 
     @property

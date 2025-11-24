@@ -23,12 +23,12 @@ def _current_snapshot_path() -> Path:
 
 
 def _current_ttl_seconds() -> float:
-    """Return the configured TTL, defaulting to 0.5s when env vars are absent or invalid."""
-    raw = os.getenv("VISIONMATE_LIDAR_TTL", "0.5")
+    """Return the configured TTL, defaulting to 3.0s when env vars are absent or invalid."""
+    raw = os.getenv("VISIONMATE_LIDAR_TTL", "3.0")
     try:
         return float(raw)
     except ValueError:
-        return 0.5
+        return 3.0
 
 
 def read_latest_snapshot(path: Optional[str] = None, ttl: Optional[float] = None) -> Optional[Dict[str, Any]]:
@@ -72,10 +72,6 @@ def read_latest_snapshot(path: Optional[str] = None, ttl: Optional[float] = None
     except (OSError, json.JSONDecodeError):
         if not SIMULATION_MODE:
             logging.warning("Real mode: LiDAR snapshot at %s is unreadable", snapshot_path)
-        return None
-
-    if not SIMULATION_MODE and isinstance(payload, dict) and payload.get("source") == "mock":
-        logging.warning("Real mode: Ignoring mock LiDAR payload at %s", snapshot_path)
         return None
 
     return payload

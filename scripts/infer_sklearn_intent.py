@@ -34,25 +34,45 @@ def predict_intent(text: str, mdl, TAU=0.5):
 
 _RULES = [
     {
-        "keywords": ["障碍", "前面有没有", "危险", "路上有什么"],
-        "intent": "hazard_alert",
-        "function": "vision.check_hazards",
-    },
-    {
-        "keywords": ["帮我读", "上面写了什么", "读这个", "这句话是什么"],
-        "intent": "read_sign_text",
-        "function": "vision.ocr_read",
-    },
-    {
-        "keywords": ["描述", "描述一下周围", "环境", "环境怎么样", "describe"],
-        "intent": "describe_scene",
-        "function": "vision.describe_scene",
-    },
-    {
-        "keywords": ["前面有什么", "帮我看看", "周围有什么", "describe"],
-        "intent": "object_ahead",
+        "keywords": [
+            "在哪", "找", "左边", "右边", "哪里", "位置", "搜", "查",
+            "find", "where", "locate", "position", "left", "right",
+            "边度", "喺边", "揾", "左手边", "右手边", "稳"
+        ],
+        "intent": "locate",
         "function": "vision.detect_objects",
+        "action": "call"
     },
+    {
+        "keywords": [
+            "读", "念", "字", "写了什么", "文字", "文章", "书",
+            "read", "text", "say", "what does it say", "scan",
+            "读下", "写乜", "念出黎"
+        ],
+        "intent": "read",
+        "function": "vision.ocr_read",
+        "action": "call"
+    },
+    {
+        "keywords": [
+            "危险", "障碍", "能走吗", "撞", "安全", "路况", "过马路",
+            "safe", "hazard", "obstacle", "watch out", "clear",
+            "危唔危险", "会唔会撞", "行唔行得", "阻住"
+        ],
+        "intent": "safety",
+        "function": "vision.check_hazards",
+        "action": "call"
+    },
+    {
+        "keywords": [
+            "描述", "环境", "周围", "前面", "前边", "面前", "看见什么", "场景",
+            "describe", "what is", "surrounding", "scene", "front",
+            "讲下周围", "环境点样", "前面有乜", "睇下", "附近有乜"
+        ],
+        "intent": "describe",
+        "function": "vision.describe_scene",
+        "action": "call"
+    }
 ]
 
 
@@ -61,7 +81,7 @@ def _rule_route(text: str) -> Optional[Dict[str, Any]]:
     for rule in _RULES:
         if any(k.lower() in t for k in rule["keywords"]):
             return {
-                "action": "call",
+                "action": rule.get("action", "call"),
                 "function": rule["function"],
                 "intent": rule["intent"],
                 "args": {"raw_text": text, "confidence": 1.0},

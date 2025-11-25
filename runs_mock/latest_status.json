@@ -1,0 +1,9 @@
+{
+  "intent": "Obstacle Avoidance (避障模式)",
+  "raw_text": "前方发现行人，距离较近，请注意。",
+  "hazard_level": "High",
+  "message": "Warning: Pedestrian detected at 2.5m. Stop recommended.",
+  "image_path": "runs_mock\\mock_orig.jpg",
+  "yolo_debug_path": "runs_mock\\mock_yolo.jpg",
+  "depth_overlay_path": "runs_mock\\mock_depth.jpg"
+}
